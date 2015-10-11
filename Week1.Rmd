@@ -1,0 +1,1198 @@
+
+---
+title: "MITx: CTL.SC2x Supply Chain Design"
+week: 
+author: "F.J.Padt"
+date: "`r Sys.Date()`"
+output: 
+   pdf_document:
+    toc:             true
+    toc_depth:       2
+    number_sections: true
+    fig_caption:     false
+    fig_crop:        true
+    highlight:       tango    
+---
+
+
+\newpage
+
+![Logo](https://www.edx.org/sites/default/files/theme/edx-logo-header.png)  
+
+[MITx: CTL.SC2x Supply Chain Design](https://courses.edx.org/courses/course-v1:MITx+CTL.SC2x+3T2015/courseware/2f5f4f139c3145eb96d0574bf7780bd4/4008ae930f104c83aaaf94bda0e003d8/)
+
+```{r RSetup, echo=FALSE, eval=TRUE, results='asis'}
+library(data.table, verbose = FALSE, quietly = TRUE)
+library(knitr     , verbose = FALSE, quietly = TRUE)
+library(printr    , verbose = FALSE, quietly = TRUE)
+library(xlsx      , verbose = FALSE, quietly = TRUE)
+library(ggplot2   , verbose = FALSE, quietly = TRUE)
+library(lpSolve   , verbose = FALSE, quietly = TRUE)
+library(Rglpk     , verbose = FALSE, quietly = TRUE)
+
+fEcho    <- TRUE
+fEval    <- TRUE
+fCache   <- FALSE
+fResults <- 'markup'
+```  
+
+# Week 1: Overview of Supply Chain Design
+
+# Lesson 1: Overview of Supply Chain Design
+
+## QQ 1
+When we talk about Supply Chain design, it usually involves decisions about 
+which of the below items? You may select more than one option:  
+
+1. Selection of suppliers, and location of distribution centers and 
+manufacturing facilities  
+2. Type of Inventory Management software  
+3. Designing Supply Chain contracts with suppliers  
+4. Demand collaboration with customers  
+5. None of the above  
+
+answer: 1,2,3,4
+
+### EXPLANATION
+
+Supply chain design is about making the right decisions for physical, information, and payment flows. The major part of the process is the physical flow of course, but this is only the "tip of the iceberg". Options 2, 3, and 4 are all about the information flow design - which is just as important as the physical flows in Supply Chain design. Some would argue that selection of software is not part of the design of the supply chain. I believe it is since the selection determines what I can and cannot consider in the design of the supply chain itself. Selecting, for example, Llamasoft's Supply Chain Guru or JDA’s Supply Chain Strategist tool instead of using a spreadsheet for network design really establishes the limits of the planning activity!
+
+## QQ 2
+After several meetings with the sales and operations teams, you decided to opt 
+for a (R,S) inventory replenishment policy. Which of the following statements 
+is true about the decision you just made?
+
+1. Your design involves lower carrying costs than a Continuous Review system
+2. You need optimal parameters to use this design
+3. You do not need a computer managed system
+4. None of the above
+5. All of the above
+
+answer: 3
+
+### EXPLANATION
+
+The decision to use a Periodic Review replenishment policy involves some tradeoffs by comparison to a continuous system. The good thing is that for a periodic review system, you can manually check the level of your inventory every R time periods. This means you do not need to buy additional software or computers, and you only need reasonable parameters to implement the policy. The R,S policy is what you probably use when buying groceries at your home! However, carrying costs are usually higher for Periodic Review policies than for Continous Review policies since you need to hold additional safety stock to cover this longer lead plus replenishment time.
+
+## QQ 3.1
+You are manufacturing a highly innovative product domestically. 
+While you have a rough idea of the demand for this product, your range is 
+pretty wide since it is new to market. When designing your supply chain, 
+you need to choose your inventory stocking model.
+
+Which configuration do you recommend?
+
+1. Build to Stock  
+2. Configure to Order  
+3. Build to Order
+
+answer: 3
+
+### EXPLANATION
+
+For a new product that is manufactured domestically, it is preferable to build to order since your demand visibility forecast is not necessarily reliable. Of course, there are other parameters to consider so you can satisfy your customers: shipping options, order fulfillment locations, number of distribution centers...
+
+## QQ 3.2
+Fisher (1997) identified two general objectives for supply chains: 
+Efficiency for Functional products and Matching Supply to Demand for 
+Innovative products.
+
+Which of the following products do you think should be treated as innovative products?
+
+a. Cans of Chicken Noodle Soup  
+b. Cans of Chicken Noodle Soup with new holograms of Star Wars Characters on them  
+c. A new anti-malaria medicine  
+d. Gasoline and diesel  
+e. White T-shirts  
+f. Headphones for portable music devices
+
+Note: Make sure you select all of the correct options—there may be more than one!
+
+Answer: b,c 
+
+### EXPLANATION
+
+This is always a very context driven question, but we can make some guesses here. Obviously, cans of soup are not going to be innovative - unless, there is something different about them (promotions, limited runs, etc.). Choice b is an example of something that will have pretty uncertain demand - I would treat it as innovative. Choice is c is not obvious - certain anti-malaria medicine have been around for ages and are made to stock in large volumes. However, if we consider a new drug we want to make sure we meet the demand rather than being just effecient! The remainder could be argued for, but generally you are looking for an efficient supply chain here - treat them as functional.
+
+
+
+# Lesson 2: Network Flow Models
+
+## QQ1
+Which of the following statements are/is true about network models?
+
+1. The minimum cost flow problem is about finding the shortest path between 
+two nodes  
+2. There will never be more than two arcs for every node  
+3. A network is a connection of nodes and arcs  
+4. In a transportation setting, nodes are typically facilities such as 
+stores or terminals  
+5. Network models always perfectly mimic reality  
+6. Arcs can only flow in one direction in a network
+
+Answer: c,d
+
+Note: Make sure you select all of the correct options—there may be more than one!
+
+### EXPLANATION
+
+The minimum cost flow problem is about finding the lowest cost flow through the network to satisfy demand, not the shortest path.
+
+There can be many arcs for every node. For instance, there could be several roads leading to one warehouse.
+
+A network is a collection of nodes (DCs, warehouses, stores, terminals, etc.) and arcs (roads, railways, flows, etc.).
+
+A model is always an abstraction of reality, which means the model does not perfectly mimic reality. If correctly specified, though, it provides insights about reality.
+
+Arcs can be single direction or multi-directional, just like roads.
+
+## QQ2
+
+```{r SandyCoExample, results=fResults, echo=fEcho, eval=fEval}
+# SandyCoPART1 v2
+
+costs <- matrix(c(250, 325, 445, 
+                  275, 260, 460), 
+                nrow=2, ncol=3, byrow = TRUE)
+row.signs <- rep ("<=", 2)
+row.rhs <- c(100, 125)
+col.signs <- rep (">=", 3)
+col.rhs <- c(25, 95, 80)
+
+lp.transport (costs, "min", row.signs, row.rhs, col.signs, col.rhs)
+lp.transport (costs, "min", row.signs, row.rhs, col.signs, col.rhs)$solution
+
+# SandyCoPART1 v1
+# Using Rglpk
+obj <- c(250, 325, 445, 275, 260, 460) 
+mat <- matrix(c(1, 1, 1, 0, 0, 0,
+                0, 0, 0, 1, 1, 1,
+                1, 0, 0, 1, 0, 0,
+                0, 1, 0, 0, 1, 0,
+                0, 0, 1, 0, 0, 1), nrow=5,  byrow = TRUE)
+dir <- c("<=", "<=", ">=", ">=", ">=")
+rhs <- c(100, 125, 25, 95, 80)
+max <- FALSE
+
+Rglpk_solve_LP(obj, mat, dir, rhs, max = max)
+```
+
+## QQ2.1  
+Consider a retailer with a distribution network consisiting of a DC and four 
+stores. Suppose the manager wants to build a network flow model and use 
+a linear program to minimize transport costs in the network. 
+Transport capacity is widely available.
+
+Which of the following statements describe the constraints in such a model?
+
+1. The number of shipments per period from the DC to the stores  
+2. The cost of a shipment from the DC to the stores  
+3. The demand in each store and period and the capacity of the DC  
+4. The minimization of cost
+
+answer: 3
+
+### EXPLANATION
+
+1. These are the decision variables
+
+2. These are the coefficients of the decision variables in the objective function
+
+3. These are the constraints! The retailer wants to minimize cost such that these constraints are satisfied.
+
+4. This is the objective
+
+## QQ2.2  
+Suppose you have a network with 3 distribution centers (DCs) each of which 
+can serve any of the 8 customer regions. You want to solve the 
+transportation problem.
+
+2.2a. How many decision variables will you have?
+
+answer: 24  
+ 
+2.2b. How many supply constraints will you need?
+
+answer: 3  
+ 
+2.2c. How many demand constraints will you need?
+
+answer: 8
+
+### EXPLANATION
+
+You will need 24 arcs to connect 3 DCs to 8 regions. Therefore, you will need 24 xi,j variables.
+
+There will be 3 Supply Constraints since there are three DCs and 8 Demand Constraints since there are that many customer regions.
+
+## QQ3.2  
+Use the SandyCo model that is in the Reference Material section for Lesson2 
+(under Video 1). Suppose that the demand changes such that 
+D1=90,D2=30,D3=100. What are the new values for the following variables?
+
+```{r SandyCoExample2, results='asis', echo=fEcho, eval=fEval}
+costs <- matrix(c(250, 325, 445, 275, 260, 460), 2, 3, byrow = TRUE)
+row.signs <- rep ("<=", 2)
+row.rhs <- c(100, 125)
+col.signs <- rep (">=", 3)
+col.rhs <- c(90, 30, 100)
+
+lp.transport (costs, "min", row.signs, row.rhs, col.signs, col.rhs)  
+lp.transport (costs, "min", row.signs, row.rhs, col.signs, col.rhs)$solution
+
+```
+
+x1,1
+
+ 90
+ 
+x1,2
+
+ 0
+ 
+x1,3
+
+ 10
+ 
+x2,1
+
+ 0
+
+x2,2
+
+ 30  
+ 
+x2,3
+
+ 90  
+ 
+What is the cost for this solution?
+
+76150
+
+### EXPLANATION
+
+All you need to do is change the values for the RHS of the Demand constraints. In the first formulation (SandyCo v1) these are cells K13:K15.
+
+## QQ3.3  
+Using the same model for SandyCo, suppose the demand for each region is 
+changed to 80 tons.
+
+What would the outcome be when you optimize this model?
+
+1. The solution will be roughly the same  
+2. The solution value will be higher since the total demand is higher  
+3. Some of the decision variables will turn negative  
+4. The problem will not solve  
+5. None of the above
+
+```{r SandyCoExample3, results='asis', echo=fEcho, eval=fEval}
+costs <- matrix(c(250, 325, 445, 275, 260, 460), 2, 3, byrow = TRUE)
+row.signs <- rep ("<=", 2)
+row.rhs <- c(100, 125)
+col.signs <- rep (">=", 3)
+col.rhs <- c(80, 80, 80)
+
+lp.transport (costs, "min", row.signs, row.rhs, col.signs, col.rhs)
+lp.transport (costs, "min", row.signs, row.rhs, col.signs, col.rhs)$solution
+
+```
+
+### EXPLANATION
+
+Changing the demand for each region to be 80 tons, would meand we have a total demand of 240 tons. The total supply is only 225 tons, so the problem is infeasible and will not solve. You will get an error statement!
+
+Infeasible problems can happen a lot when we have capacity constraints. It simply means that the solution space, as defined by the constraints, is empty. It has nothing to do with the objective function. The space bounded by the constraints is called the "Feasible Region". When this happens to you in practice - try relaxing the different constraints to see where the model is having problems.
+
+```{r SandyCo_Part2, results='asis', echo=fEcho, eval=fEval}
+costs <- matrix(c(250, 325, 445, 275, 260, 460), 2, 3, byrow = TRUE)
+row.signs <- rep ("<=", 2)
+row.rhs <- c(100, 125)
+col.signs <- rep (">=", 3)
+col.rhs <- c(80, 80, 80)
+
+lp.transport (costs, "min", row.signs, row.rhs, col.signs, col.rhs)
+lp.transport (costs, "min", row.signs, row.rhs, col.signs, col.rhs)$solution
+
+```
+
+```{r SandyCo PART2, results=fResults, echo=fEcho, eval=fEval}
+# SandyCoPART1 v2
+# Using Rglpk
+obj <- c(190, 210, 185, 205, 175, 180, 165, 235, 130, 145) 
+mat <- matrix(
+  c(1, 1, 0, 0,  0,  0,  0,  0,  0,  0, 
+    0, 0, 1, 1,  0,  0,  0,  0,  0,  0, 
+    0, 0, 0, 0,  1,  0,  0,  1,  0,  0, 
+    0, 0, 0, 0,  0,  1,  0,  0,  1,  0, 
+    0, 0, 0, 0,  0,  0,  1,  0,  0,  1, 
+    1, 0, 1, 0, -1, -1, -1,  0,  0,  0, 
+    0, 1, 0, 1,  0,  0,  0, -1, -1, -1),  
+  nrow=7,  byrow = TRUE)
+dir <- c("<=", "<=", ">=", ">=", ">=", "==","==")
+rhs <- c(100, 125, 25, 95, 80, 0, 0)
+max <- FALSE
+
+Rglpk_solve_LP(obj, mat, dir, rhs, max = max)
+
+```
+
+## QQ5
+
+### EXPLANATION
+
+The correct order:
+
+Read and understand the problem thoroughly
+
+Determine the Decision Variables (DVs)
+
+Formulate Objective Function as a linear function of DVs
+
+Formulate Constraints as linear functions of DVs
+
+Identify Upper and Lower bounds on DVs
+
+Also, be sure to understand your assumptions and limitations! Remember that a model is an abstraction of reality.
+
+# Practice Problems
+
+## PP1: STEELCO
+SteelCo is a small steel distributor in Northern USA. They have two 
+distribution centers (DCs), one in Allentown, PA, and one in Toledo, OH.
+
+SteelCo has just received a large order from a construction contractor 
+and will be supplying steel to four construction projects in the Northeast: 
+one in Buffalo, one in Albany, one in Philadelphia, and one in Cleveland.
+
+The contractor has ordered the following amounts to be shipped each week:
+Project     | Pounds
+----------- | ----------
+Buffalo     | 40,500 pounds
+Albany      | 22,230 pounds
+Philadelphia| 85,200 pounds
+Cleveland   | 47,500 pounds
+
+Both DCs can each handle an additional 100,000 pounds of steel per week.
+
+The transport costs for a pound of steel for the different DC-construction site 
+combinations are given in the table below.
+
+DC           |  Buffalo | Albany | Philadelphia | Cleveland
+------------ | -------- | ------ | ------------ | ---------
+Allentown    |    52    |   32   |     11       |     69   
+Toledo       |    45    |   84   |     76       |     15
+
+```{r PP1, results=fResults, echo=fEcho, eval=fEval}
+# Using Rglpk
+# decision variables x1:x8 representing the flow from DC to project
+obj <- c(52, 32, 11, 69, 45, 84, 76, 15)
+mat <- matrix(c(1, 1, 1, 1, 0, 0, 0, 0, 
+                0, 0, 0, 0, 1, 1, 1, 1, 
+                1, 0, 0, 0, 1, 0, 0, 0, 
+                0, 1, 0, 0, 0, 1, 0, 0, 
+                0, 0, 1, 0, 0, 0, 1, 0, 
+                0, 0, 0, 1, 0, 0, 0, 1
+               ), nrow=6,  byrow = TRUE)
+dir <- c("<=", "<=", ">=", ">=", ">=", ">=")
+rhs <- c(100000, 100000, 40500, 22230, 85200, 47500)
+max <- FALSE
+
+sol <- Rglpk_solve_LP(obj, mat, dir, rhs, max = max)
+sol
+
+# sol[[1]]
+
+```
+
+### PP1.1
+Suppose SteelCo wants to minimize costs. How many pounds of steel should be 
+shipped from the DC in Allentown, PA, to the four construction projects, in total?
+
+`r as.integer(format(sum(sol$solution[1:4]), scientific = FALSE)) `
+
+### PP1.2
+
+4569920 -> sol[[1]]
+
+### PP1.3
+If we follow the suggested strategy, only one of the DCs will have additional 
+available capacity. Which one?
+
+1. Allentown, PA  
+2. Toledo, OH  
+3. Both will have available capacity
+
+DC: AllenTown `r 100000 - sum(sol$solution[1:4])`
+DC: Toledo    `r 100000 - sum(sol$solution[5:8])`  
+
+
+## PP2: FRUITY JUICE
+Fruity Juice sells freshly squeezed fruit drinks from its two (2) stores in 
+the greater Boston area. One of the main ingredients for their specialty drinks 
+is bananas. Each store uses 20 boxes of bananas per week for these fruit drinks.
+
+Currently, Fruity Juice uses two (2) wholesalers to supply the bananas. 
+Wholesaler 1 charges $25 per box to supply Store 1, but adds a surcharge at $1 
+per box to supply Store 2 (for a total of $26 per box) because Store 2 does 
+not permit back room loading by hand lift. Wholesaler 2 charges $25.50 per box 
+regardless of the store. Each wholesaler has the capacity to deliver 
+50 boxes per week to the stores.
+
+Now, a manager at Fruity Juice has been given the option to source directly 
+from a Boston-area distributor at $20 per box. However, in order to get the 
+bananas at the lower price they have to be picked up at the warehouse by 
+Fruity Juice. For this they can use the company van, which only fits 10 boxes. 
+The van would be available for this trip only once a week.
+
+Considering the cost of being stuck in the Boston traffic, 
+bananas are not shipped between the stores.
+
+```{r PP2, results=fResults, echo=fEcho, eval=fEval}
+# Using Rglpk
+# decision variables x1:x8 representing the flow from DC to project
+obj <- c(25, 26, 25.5, 25.5, 20, 20)
+mat <- matrix(c(1, 1, 0, 0, 0, 0,  
+                0, 0, 1, 1, 0, 0,  
+                0, 0, 0, 0, 1, 1,  
+                1, 0, 1, 0, 1, 0,  
+                0, 1, 0, 1, 0, 1 
+               ), nrow=5,  byrow = TRUE)
+dir <- c("<=", "<=", "<=", ">=", ">=")
+rhs <- c(50, 50, 10, 20, 20)
+max <- FALSE
+
+sol <- Rglpk_solve_LP(obj, mat, dir, rhs, max = max)
+sol
+```
+
+### PP2.1  
+Suppose Fruity Juice wants to minimize costs. What is the optimal number of 
+boxes of bananas to source directly from the Distributor?
+
+`r sum(sol$solution[5:6])` 
+ 
+### PP2.2  
+Which is the minimum cost of the system? Round your answer to the nearest 
+dollar value, without the dollar sign, e.g. , if your answer is $35.49, 
+enter 35 and if it is $35.50 enter 36.
+
+`r sol$optimum`
+ 
+### PP2.3  
+How many boxes of bananas are purchased at $26 per box according to the 
+cost-optimal solution?
+
+`r sol$solution[which(obj==26)]` 
+ 
+### PP2.4  
+Wholesaler 2 really wants your business. They are willing to offer you all 
+the bananas you want, at $24 per box fully delivered to both stores.
+
+What should you do?
+
+```{r PP2.4, results=fResults, echo=fEcho, eval=fEval}
+obj <- c(25, 26, 24, 24, 20, 20)
+sol <- Rglpk_solve_LP(obj, mat, dir, rhs, max = max)
+sol
+
+```
+
+1. Ignore the offer  
+2. Accept the offer and source 40 boxes of bananas from Wholesaler 2 each week  
+3. Accept the offer and source 30 boxes of bananas from Wholesaler 2 each week  
+4. Accept the offer and source 20 boxes of bananas from Wholesaler 2 each week
+
+`r sum(sol$solution[3:4])`
+answer: 3
+
+## PP3: RALPH CALVIN HILFIGER (RCH) INDUSTRIES
+
+Clothing manufacturer and retailer Ralph Calvin Hilfiger (RCH) Industries 
+operates five (5) factories. They distribute their products through five (5) 
+regional distribution centers (DCs) each of which supports a specific market. 
+
+To reduce the number of direct shipments between factories and regional DCs, 
+as well as improve the load factor of shipments, RCH has utilized a 
+crossdocking (XD) facility for some time.  Owing to the success of their 
+existing crossdocking facility (XD1), RCH has now decided to open an 
+additional facility (XD2).
+
+The clothes are transported through the network in small plastic totes via 
+truck. The transportation costs for a tote between the five factories 
+and the two crossdocking facilities are given in the table below.
+
+Factory | Crosdock 1 | Crossdock 2
+------- | ---------- | -----------
+1       |   30       |    50
+2       |   23       |    66
+3       |   35       |    14
+4       |   70       |    12
+5       |   65       |    70
+
+
+The transportation costs for a tote between the crossdocking facilities and 
+the regional DCs are given in the table below.
+
+Crossdock | DC1 | DC2 | DC3 | DC4 | DC5
+--------- | --- | --- | --- | --- | ---
+XD1       | 12  | 25  | 22  | 40  | 41  
+XD2       | 65  | 22  | 23  | 12  | 15
+
+The five factories have the following production capacities per week (number of totes):
+
+Factory 1: 200
+Factory 2: 300
+Factory 3: 100
+Factory 4: 150
+Factory 5: 220
+
+The five regional DCs face the following demand per week (number of totes):
+
+DC 1: 150
+DC 2: 100
+DC 3: 110
+DC 4: 200
+DC 5: 180
+
+The crossdocking facilities have much spare capacity.
+
+
+```{r PP3, results=fResults, echo=fEcho, eval=fEval}
+# Using Rglpk
+# decision variables x1:x8 representing the flow from DC to project
+obj <- c(30, 50, 23, 66, 35,
+         14, 70, 12, 65, 70,
+         12, 25, 22, 40, 41,
+         65, 22, 23, 12, 15)
+
+mat <- matrix(
+  c(1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
+    1, 0, 1, 0, 1, 0, 1, 0, 1, 0,-1,-1,-1,-1,-1, 0, 0, 0, 0, 0, 
+    0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0,-1,-1,-1,-1,-1), 
+  nrow=12, byrow = TRUE)
+dir <- c(rep("<=", 5), rep(">=", 5), rep("==", 2))
+rhs <- c(200, 300, 100, 150, 220, 150, 100, 110, 200, 180, 0, 0)
+max <- FALSE
+
+PP3 <- Rglpk_solve_LP(obj, mat, dir, rhs, max = max)
+PP3
+```
+
+##PP3.1 
+Suppose RCH wishes to plan the flow of product from Factories to Crossdocks to 
+Distribution Centers in order to minimize total costs.
+
+How much should be shipped through the new facility, crossdocking facility two?
+
+sum(sol$solution[seq(from=2, to=10, by=2)])
+
+##PP3.2
+Which DC's will be supported by the new crossdocking facility, XD2?
+
+1. DC 1  
+2. DC 2  
+3. DC 3  
+4. DC 4  
+5. DC 5
+
+Note: Make sure you select all of the correct options—there may be more than one!
+
+answer: 4,5 
+```{r , echo=FALSE, eval=TRUE}
+PP3$solution[16:20]
+```
+
+##PP3.3  
+What is the minimum cost? Enter your answer in dollars without the dollar sign.
+```{r , echo=FALSE, eval=TRUE}
+PP3$optimum
+```
+
+30220
+
+##PP3.4
+Which of the following changes would not affect the optimal solution?
+
+1. Only allowing a weekly flow of 400 totes through each of the crossdocking 
+facilities  
+2. Closing Factory 5  
+3. Reducing the capacity of Factory 1 to 190 totes  
+4. All of the above All of the above - correct
+ 
+Factory 1: sum(sol$solution[1:2]  ) 
+Factory 5: sum(sol$solution[9:10] ) 
+XD1 Flow : sum(sol$solution[11:15]) 
+XD2 Flow : sum(sol$solution[16:20]) 
+
+```{r, eval=TRUE, results='markup'}
+sum(sol$solution[1:2]  ) 
+sum(sol$solution[9:10] ) 
+sum(sol$solution[11:15]) 
+sum(sol$solution[16:20]) 
+```
+
+
+# Verfified Practice Problems
+## VPP1: DISTRIBUTION OF GOLF CAPS
+
+A large Golf equipment retailer with 20 stores across Europe has decided to 
+sell a new type of multi-purpose, one-size-fits-all golf cap. The logistics 
+manager has approached you to help him decide how to plan the distribution.
+
+There are five (5) wholesale locations that can supply the caps, and the 
+retailer uses two (2) distribution centers (DCs) to break the shipments and 
+sort them for the stores.  The Golf Caps will flow from the wholesalers to the 
+DCs and then onto the stores. 
+
+The transport costs for a single cap from the wholesalers to the DCs, 
+the transport costs from DCs to stores, as well as weekly demand and 
+capacities, are found in this Excel file or this Libre Office file.
+
+### VPP1.1  
+Which wholesalers' shipments should be routed through DC 1 in order to 
+minimize costs?
+
+1. Wholesaler 1  
+2. Wholesaler 2  
+3. Wholesaler 3  
+4. Wholesaler 4  
+5. Wholesaler 5  
+
+Note: Make sure you select all of the correct options—there may be more than one!
+
+### VPP1.2  
+How many stores are supplied by more than one DC in the cost optimal solution?
+
+ unanswered  
+ 
+### VPP1.3  
+What is the cost of the cost-optimal solution?
+
+ unanswered  
+ 
+
+### VPP1.4  
+Wholesaler 3 has offered to increase its capacity to as much as you need. Should you accept their offer?
+
+Should you accept their offer?
+
+1. Yes  
+2. No  
+3. You need more information to make the decision  
+ 
+## VPP2: LOGCO
+LogCo is a logistics service provider. They just signed a contract with a large manufacturer, making them the exclusive provider of transport services from three of the manufacturer's plants to its six regional warehouses. LogCo has also been contracted to do the logistics planning for this network.
+
+The six regional warehouses face the following demand in number of truckloads per week:
+
+Providence  :  4
+Philadelphia: 15
+Columbus    :  5
+Knoxville   : 12
+Jacksonville:  3
+Richmond    :  8
+
+Since transportation costs are a large part of total costs for the client, the three plants (located in Cincinnati, Atlanta, and Detroit) can adjust production planning to fit the transport network. They do, however, have a capacity limit of producing enough goods to fill 20 truckloads per week.
+
+LogCo owns and operates two large terminals, one in Scranton, PA, and one in Charlotte, NC.
+
+The transportation costs are given in the table below and can be downloaded here (Excel) or here (Libre Office).
+
+### VPP2.1  
+LogCo is not sure whether it would be optimal to route the traffic through 
+the terminals, or have all shipments going straight from a plant to a warehouse.
+
+In choosing between using both terminals or using none, 
+what should LogCo do to minimize costs?
+
+1. Use the terminals for this client  
+2. Not use the terminals for this client  
+
+- unanswered
+
+### VPP2.2  
+Which of the following is true about the cost-optimal solution with and without the two terminals?
+
+1. Philadelphia should have Detroit as the sole supplier if terminals are used.  
+2. It is optimal to produce at full capacity in Cincinnati independently of 
+whether the terminals are used or not.  
+3. The Knoxville warehouse should have incoming shipments from two sources 
+independently of whether the terminals are used or not.  
+4. Richmond, Philadelphia, and Columbus warehouses should have shipments 
+from two sources if the terminals are not used.  
+
+# Supplemental Materials
+## SELECTED MIT SUPPLY CHAIN MANAGEMENT (SCM) THESES
+
+### Future Value Chains in the Computer Hardware Industry (2005)
+[Executive Summary](https://courses.edx.org/asset-v1:MITx+CTL.SC2x+3T2015+type@asset+block/theses_2006_Roy_execsumm.pdf)
+[Full Thesis](https://courses.edx.org/asset-v1:MITx+CTL.SC2x+3T2015+type@asset+block/theses_2006_Roy_thesis.pdf)
+
+### The Pharmaceutical Supply Chain: a Diagnosis of the State-of-the-Art (2005)
+[Executive Summary](https://courses.edx.org/asset-v1:MITx+CTL.SC2x+3T2015+type@asset+block/theses_2005_Singh_ExecSummary.pdf)
+[Full Thesis](https://courses.edx.org/asset-v1:MITx+CTL.SC2x+3T2015+type@asset+block/theses_2005_Singh_Thesis.pdf)
+
+### Supply Chain Strategies in the Apparel Industry: The Case of Victoria’s Secret (2005)
+[Executive Summary](https://courses.edx.org/asset-v1:MITx+CTL.SC2x+3T2015+type@asset+block/theses_2005_Kumar_ExecSummary.pdf)
+[Full Thesis](https://courses.edx.org/asset-v1:MITx+CTL.SC2x+3T2015+type@asset+block/theses_2005_Kumar_Thesis.pdf)
+
+### A Portfolio Approach to Supply Chain Design (2010)
+[Paper](https://courses.edx.org/asset-v1:MITx+CTL.SC2x+3T2015+type@asset+block/Lee_scmr_portfolio_approach_sc_design_HauLee.pdf)
+
+### Designing the distribution network in a supply chain (2003)
+[Paper](http://www.sciencedirect.com/science/article/pii/S1366554502000443)
+
+# Graded Assignment
+
+##GA1:  BUYING BOLTS FOR INDUSTRYCO
+
+You have recently been appointed Category Manager for nuts and bolts at 
+IndustryCo, a manufacturer with a large demand for bolts at its three (3) 
+factories.  You have surveyed the market and found four (4) suppliers for a 
+certain steady selling SKU, XA21R45.   
+Your factories' weekly demand for bolts are:
+
+* Factory 1:  4,000 cases/week  
+* Factory 2: 11,000 cases/week  
+* Factory 3: 19,000 cases/week  
+
+Each of the four suppliers can provide the XA21R45, but they differ in 
+unit price, weekly capacity,  and distance to IndustryCo's three factories.  
+The unit prices and the weekly capacity for each of the four suppliers 
+are shown below: 
+
+* Supplier 1: U.S. Ainbolt    - Unit cost:  0.12 $/case  Capacity  10,000 cases/week  
+* Supplier 2: Der Bolt, Thun  - Unit cost:  0.15 $/case  Capacity  10,000 cases/week  
+* Supplier 3: Li Tningbolt    - Unit cost:  0.10 $/case  Capacity   5,000 cases/week  
+* Supplier 4: M. Bolton       - Unit cost:  0.13 $/case  Capacity  10,000 cases/week  
+
+You are trying to plan the weekly flow of bolts from these suppliers to your 
+factories.  Based on the current contract with your transportation carrier, 
+the unit transportation cost for a case of bolts is $0.05 per mile from any of 
+the suppliers to any of the factories. 
+The distances between the four suppliers and the three factories are given in 
+the tables below.
+(and Fredrik apologizes for the bad puns in advance)
+
+Transport Distance (miles)  
+
+Supplier | Factory 1 | Factory 2 | Factory 3
+-------- | --------- | --------- | ---------  
+1        |  400      |    700    |   850   
+2        |  120      |    340    |   760     
+3        |  500      |    500    |   680     
+4        |  790      |    360    |   400     
+
+```{r GA1_lp, results=fResults, echo=fEcho, eval=fEval}
+dist  <- matrix(c(400, 700, 850, 120, 
+                  340, 760, 500, 500, 
+                  680, 790, 360, 400), 
+                nrow=4, ncol=3, byrow=TRUE) 
+tcsts <- dist * 0.05
+pcsts <- matrix(c(rep(0.12, 3), 
+                  rep(0.15, 3), 
+                  rep(0.10, 3), 
+                  rep(0.13, 3)),
+                nrow=4, ncol=3, byrow = TRUE)
+costs <- tcsts + pcsts
+row.signs <- rep ("<=", 4)
+row.rhs <- c(10000, 10000, 5000, 10000)
+col.signs <- rep (">=", 3)
+col.rhs <- c(4000, 11000, 19000)
+
+GA1_lp <- lp.transport (costs, "min", row.signs, row.rhs, col.signs, col.rhs)
+GA1_lp
+GA1_lp$solution
+
+```
+
+  
+  
+```{r GA1_Rglp, results=fResults, echo=fEcho, eval=fEval}
+# SandyCoPART1 v2
+# Using Rglpk
+obj <- c(as.vector(t(costs))) 
+mat <- matrix(
+  c(1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,  
+    0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 
+    0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1,    
+    1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 
+    0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 
+    0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1),  
+  nrow=7,  byrow = TRUE)
+dir <- c(rep("<=", 4), rep(">=", 3))
+rhs <- c(10000, 10000, 5000, 10000, 4000, 11000, 19000)
+max <- FALSE
+
+GA1_Rglp <- Rglpk_solve_LP(obj, mat, dir, rhs, max = max)
+GA1_Rglp
+matrix(GA1_Rglp$solution, nrow=4, byrow=TRUE)
+```
+
+### GA1.1  (1 point possible)
+Currently, the factories operate independently. Disregarding any of the other 
+factories, which supplier should Factory 1 select in order to have the 
+lowest total (purchase and transport) cost for them?
+
+1. Supplier 1: U.S. Ainbolt  
+2. Supplier 2: Der Bolt, Thun  
+3. Supplier 3: Li Tningbolt  
+4. Supplier 4: M. Bolton  
+
+answer: 2
+
+```{r}
+which(costs[, 1]==min(costs[, 1]))
+costs[which(costs[, 1]==min(costs[, 1])),1]
+```
+
+
+### GA1.2  (1 point possible)
+You want to take a holistic view of bolt sourcing instead of having each 
+factory select its supplier on its own. You decide to create a model to help 
+you select the optimal sourcing assignment for all of the factories for 
+the XA21R45 bolts. Based on this optimization model, what is the total 
+weekly cost for supplying bolts for IndustryCo? Be sure to include the 
+purchase price as well as the transportation costs. Enter your answer in 
+dollars without a dollar sign.
+
+answer: 827880
+
+```{r}
+GA1_Rglp$optimum
+```
+  
+
+#### EXPLANATION
+To solve this we need to create a spread sheet model of the 
+Transportation Problem. There are four supply nodes and three demand nodes 
+and so there will be 12 decision variables (4 suppliers times 3 factories), 
+4 supply constraints, and 3 demand constraints. The capacities and demand 
+levels for each were provided. The variable cost of flowing one case from 
+Supplier i to Factory j = UnitPurchaseCosti+(0.05) Distancei,j
+If your solution does not give a value of $827,880 you should stop and fix 
+it so that it does in order to anwer the following questions. 
+
+
+### GA1.3  (1 point possible)
+Based on your optimization model, which supplier should Factory 1 select in 
+order to have the lowest total (purchase and transport) cost for IndustryCo?
+
+1. Supplier 1: U.S. Ainbolt    
+2. Supplier 2: Der Bolt, Thun    
+3. Supplier 3: Li Tningbolt  
+4. Supplier 4: M. Bolton  
+
+answer: 1
+
+```{r}
+GA1_lp
+GA1_lp$solution
+```  
+  
+#### EXPLANATION
+So, you might ask, why is it optimal for Factory 1 to source from a supplier 
+that is NOT its lowest cost vendor! Well, the answer lies in the difference 
+between a "locally optimal" solution and a "system optimal" solution. In the 
+earlier question when Factory 1 could do whatever it wanted, it selected 
+Supplier 2. However, if Factory 1 grabbed 4000 cases from Supplier 2 
+(Der Bolt, Thun), then Supplier 2 cannot supply 10,000 cases to Factory 2. 
+Instead, Factory 2 will need to secure an additional 4000 cases of bolts 
+from Supplier 1 at a much higher cost (total cost of $843,880 versus $827,880).
+
+The system optimal solution makes trade offs between the three factories 
+while a local solution only considers each factory by itself. This will 
+always happen in practice! The trick is to compensate or incent Factory 1 
+for its higher costs that benefit the company as a whole. One way to do this 
+is transfer payments.
+
+###GA1.4  (1 point possible)
+You want to discuss the situation with the general manager of Factory 1. 
+How much is the difference between Factory 1's total landed cost per week 
+in part 1.1 compared to the total landed cost per week from part 1.3? 
+Enter your answer in dollars without the dollar sign. For example, if the 
+TLC(1.1) = $100 and TLC(1.3) = $200, your answer would be 
+= $100 - $200 = -$100 and you would enter -100. (note the negative sign)
+
+TLC(1.1) - TLC(1.3)
+
+```{r}
+4000*(costs[2,1]-costs[1,1])
+```  
+  
+#### EXPLANATION
+We are essentially asking you to find how much Factory 1 is paying extra for 
+the globally optimal solution. For part 1.1, the TLC for Factory 1 = 
+4000 cases/week * $6.15 $/case = $24,600 per week. For part 1.3, the TLC for 
+Factory 1 = 4000 cases/week * 20.12 $/case = $80,480 $/week. Thus, the 
+differential is 24,600 - 80,480 = -55,880 $/week.
+
+So, in the globally optimal solution, Factory 1 ends up paying more so that 
+the system as a whole saves money.
+ 
+###GA1.5  (1 point possible)
+You decide to negotiate with Supplier 2 (Der Bolt, Thun) to increase their 
+capacity. They agree to increase it to 11,000 cases per week. How many cases 
+per week does Supplier 2 (Der Bolt, Thun) send to Factory 1 in the new 
+optimal solution?
+
+```{r GA15_Rglp, results=fResults, echo=fEcho, eval=fEval}
+row.rhs <- c(10000, 11000, 5000, 10000)
+GA15_lp <- lp.transport (costs, "min", row.signs, row.rhs, col.signs, col.rhs)
+GA15_lp
+GA15_lp$solution
+GA15_lp$solution[2,1]
+
+rhs <- c(10000, 11000, 5000, 10000, 4000, 11000, 19000)
+GA15_Rglp <- Rglpk_solve_LP(obj, mat, dir, rhs, max = max)
+GA15_Rglp
+GA15_Rglp$solution[4]
+```
+
+ 0  
+  
+#### EXPLANATION
+What happened? Well, having more capacity helps lower the total cost 
+($811,410 per week instead of $827,880), but none of the new supply goes to 
+Factory 1. Why not? Well, the differential benefit of supplying Factory 2 
+with this extra capcity from Supplier 2 outweighs sending them to Factory 1. 
+The model will always look for the best way save the entire system money - 
+not an individual component. Factory 2 is loving this global optimization as 
+it is really saving it money!
+
+###GA1.6  (1 point possible)
+THE EXPLANATION FOR THIS PROBLEM WILL NOT BE RELEASED UNTIL AFTER THE DUE DATE.
+
+Note: When checking answers - it will check for both of the responses, 
+not one at a time.
+
+You decide to re-negotiate with Supplier 2 (Der Bolt, Thun) to increase their 
+capacity even more. They agree to increase it to 14,000 cases per week. 
+How many cases per week does Supplier 2 (Der Bolt, Thun) send to Factory 1 in 
+the new optimal solution?
+  
+
+```{r GA16_Rglp, results=fResults, echo=fEcho, eval=fEval}
+row.rhs <- c(10000, 14000, 5000, 10000)
+GA16_lp <- lp.transport (costs, "min", row.signs, row.rhs, col.signs, col.rhs)
+GA16_lp
+GA16_lp$solution
+GA16_lp$solution[2,1]
+
+rhs <- c(10000, 14000, 5000, 10000, 4000, 11000, 19000)
+GA16_Rglp <- Rglpk_solve_LP(obj, mat, dir, rhs, max = max)
+GA16_Rglp
+GA16_Rglp$solution[4]
+```
+
+3000   
+ 
+Based on your last optimization model, what is the total weekly cost for 
+supplying bolts for IndustryCo? Be sure to include the purchase price as well 
+as the transportation costs. Enter your answer in dollars without a dollar sign.
+
+```{r}
+GA16_lp
+GA16_Rglp$optimum
+``` 
+   
+##GA2: SANDYCO DISTRIBUTION
+For this problem, we will use the Transhipment Model for SandyCo 
+(SandyCo Part 2). To recap, SandyCo has two (2) facilities that mine, clean, 
+and sort sand for use in cement, children’s playboxes, and small beaches. 
+They distribute the sand from their two (2) plants, through two (2) packaging 
+centers (DCs), to three (3) different customer regions where it is packaged 
+and sold.
+
+Each plant has a specific maximum weekly supply of available sand and each 
+region has an expected minimum weekly required demand. The cost to distribute 
+a ton of sand differs between each plant and region pairing due to distance 
+and other factors.
+
+The maximum weekly supply from 
+* Plant 1 is 100    
+* Plant 2 is 125  
+
+The expected minimum weekly required demand (tons) is:
+
+* Region 1: 25  
+* Region 2: 95  
+* Region 3: 80  
+
+The transportation costs per ton of sand are given in the table below.  
+  
+DC | Plant 1 | Plant 2 | Region 1 | Region 2 | Region 3  
+-- | ------- | ------- | -------- | -------- | --------  
+A  |  190    |  185    |  175     |   180    |  165       
+B  |  210    |  205    |  235     |   130    |  145    
+
+  
+
+```{r GA2_glpk, results=fResults, echo=fEcho, eval=fEval}
+# SandyCoPART1 v2
+# Using Rglpk
+obj <- c(180, 190, 175, 180, 165, 210, 205, 235, 130, 145) 
+mat <- matrix(
+  c(1,  0,  0,  0,  0,  1,  0,  0,  0,  0,
+    0,  1,  0,  0,  0,  0,  1,  0,  0,  0, 
+    0,  0,  1,  0,  0,  0,  0,  1,  0,  0, 
+    0,  0,  0,  1,  0,  0,  0,  0,  1,  0, 
+    0,  0,  0,  0,  1,  0,  0,  0,  0,  1, 
+    1,  1, -1, -1, -1,  0,  0,  0,  0,  0, 
+    0,  0,  0,  0,  0,  1,  1, -1, -1, -1),  
+  nrow=7,  byrow = TRUE)
+dir <- c("<=", "<=", ">=", ">=", ">=", "==","==")
+rhs <- c(100, 125, 25, 95, 80, 0, 0)
+max <- FALSE
+
+GA2_glpk  <- Rglpk_solve_LP(obj, mat, dir, rhs, max = max)
+mGA2_glpk <- matrix(GA2_glpk$solution, nrow = 2, byrow = TRUE)
+
+```
+  
+###GA2.1  (1 point possible)
+After discussions with a number of carriers, SandyCo realizes that 
+transportation costs to DC A need to be updated. The new costs are 180 per 
+ton from Plant 1 to DC A and 190 per ton from Plant 2 to DC A.
+
+How many tons of sand should be delivered from Plant 2 to DC B with the 
+new costs?
+
+```{r}
+mGA2_glpk[2, 2]
+```
+  
+  
+#### EXPLANATION
+With the new costs it is less costly to deliver to DC A compared to DC B. 
+Plant 1 can supply DC A at the lowest cost and will max out its capacity in 
+doing so. Plant 2 will deliver the remaining demand (100) through DC B.
+
+You get this by simply changing the costs in the spread sheet and resolve. 
+Your solution should be $68,325 - make sure it is before you continue!
+ 
+###GA2.2  (1 point possible)
+After hearing that a rival sand distributor is facing economic difficulties, 
+SandyCo wants to reconsider its demand estimates. Were the rival to default, 
+SandyCo believes that their demand would increase by roughly 10% across the 
+board, leading to the following minimum expected demands: 
+
+* Region 1 - 28  
+* Region 2 - 105  
+* Region 3 - 87 
+tons respectively.
+
+How many tons of sand should be delivered from DC A to Region 3 if the expected 
+minimum demand was to increase by the amount specified? 
+Note that the costs from (2.1) still apply.
+
+```{r GA2.2}
+rhs <- c(100, 125, 28, 105, 87, 0, 0)
+
+GA22_glpk  <- Rglpk_solve_LP(obj, mat, dir, rhs, max = max)
+mGA22_glpk <- matrix(GA22_glpk$solution, nrow = 2, byrow = TRUE)
+mGA22_glpk[1,5]
+```
+  
+#### EXPLANATION
+Ok, this is a bit of a surprise! Even though demand is greater now, there is 
+less sand shipped from DC A to Region 3. The increase in the demand at Region 3
+is instead handled by DC B, the more expensive option to supply Region 3 
+(205+145 compared to 180+165)! This is because capacity at Plant 1 is maxed 
+out, and the entire increase in demand needs to be handled by Plant 2. And 
+supplying Region 1 through DC B is too expensive. Instead, the increase in 
+Region 1 is handled by Plant 1 and DC A.
+
+
+###GA2.3  (1 point possible)
+The rival firm did not default - so your demand is back to the original 
+values (Region 1: 25, Region 2: 95, and Region 3: 80).
+
+The management of Plant 2 has suggested they may use some of the available 
+space in the plant for an on-site packaging machine. With such a machine in 
+place, Plant 2 would be able to bypass the DCs and ship directly to Region 1. 
+Direct transport from Plant 2 to Region 1 costs 275 per ton. 
+All other costs remain the same as in question 2.1.
+
+If Plant 2 invests in a on-site sand packaging machine, how many tons of sand 
+should be delivered directly from Plant 2 to Region 1?
+
+```{r GA23}
+obj <- c(180, 190, 175, 180, 165, 210, 205, 235, 130, 145, 275) 
+mat <- matrix(
+  c(1,  0,  0,  0,  0,  1,  0,  0,  0,  0, 0,
+    0,  1,  0,  0,  0,  0,  1,  0,  0,  0, 0, 
+    0,  0,  1,  0,  0,  0,  0,  1,  0,  0, 1,
+    0,  0,  0,  1,  0,  0,  0,  0,  1,  0, 0,
+    0,  0,  0,  0,  1,  0,  0,  0,  0,  1, 0,
+    1,  1, -1, -1, -1,  0,  0,  0,  0,  0, 0,
+    0,  0,  0,  0,  0,  1,  1, -1, -1, -1, 0),  
+  nrow=7,  byrow = TRUE)
+dir <- c("<=", "<=", ">=", ">=", ">=", "==","==")
+rhs <- c(100, 125, 25, 95, 80, 0, 0)
+max <- FALSE
+
+GA23_glpk  <- Rglpk_solve_LP(obj, mat, dir, rhs, max = max)
+matrix(c(GA23_glpk$solution, rep(0, 4)), nrow=3, byrow=TRUE)
+GA23_glpk$solution[11]
+```
+  
+#### EXPLANATION
+Now, things change quite a bit. With this machine, all of Regions 1's 
+demand can be fulfilled by Plant 2 directly at a lower cost than what was 
+achieved using the DCs (275 instead of 180+175=355). Consequently, Plant 2 
+ships 25 directly to Region 1, whereas Regions 2 and 3 are supplied through 
+the DCs. 
+Note that this changes the optimal production levels - Plant 2 should now 
+produce more! (hopefully the machine will still fit)
+
+For the coming question, make sure that your model provides the correct 
+result before continuing. To make it work, add the direct transport as a 
+new decision variable (for a total of 11 decision variables), and include it 
+in your demand and supply constraints. An easy trick for this is to just 
+insert a new column. The optimal cost should be $66,300.
+
+###GA2.4  (1 point possible)
+THE EXPLANATION FOR THIS PROBLEM WILL NOT BE RELEASED UNTIL AFTER THE DUE DATE.
+
+After investing in the new machine, a breakdown in DC B reduces the weekly 
+capacity of DC B to 80. All other costs and demand remain the same as in 
+question 2.1.
+
+How many tons of sand should Plant 1 produce if the capacity of DC B drops 
+to 80? There is no capacity constraint for DC A.
+
+
+```{r GA24}
+obj <- c(180, 190, 175, 180, 165, 210, 205, 235, 130, 145, 275) 
+mat <- matrix(
+  c(1,  0,  0,  0,  0,  1,  0,  0,  0,  0, 0,
+    0,  1,  0,  0,  0,  0,  1,  0,  0,  0, 0, 
+    0,  0,  1,  0,  0,  0,  0,  1,  0,  0, 1,
+    0,  0,  0,  1,  0,  0,  0,  0,  1,  0, 0,
+    0,  0,  0,  0,  1,  0,  0,  0,  0,  1, 0,
+    1,  1, -1, -1, -1,  0,  0,  0,  0,  0, 0,
+    0,  0,  0,  0,  0,  1,  1, -1, -1, -1, 0,
+    0,  0,  0,  0,  0,  0,  0,  1,  1,  1, 0),  
+  nrow=8,  byrow = TRUE)
+dir <- c("<=", "<=", ">=", ">=", ">=", "==","==", "<=")
+rhs <- c(100, 125, 25, 95, 80, 0, 0, 80)
+max <- FALSE
+
+GA24_glpk  <- Rglpk_solve_LP(obj, mat, dir, rhs, max = max)
+mGA24      <- matrix(c(GA24_glpk$solution[1:10], 0, 
+                       GA24_glpk$solution[11], rep(0, 3)), 
+                     nrow=3, byrow=TRUE)
+sum(mGA24[, 1])
+```   
