@@ -2,6 +2,9 @@
 .Rhistory
 .Rapp.history
 
+# Data
+.RData
+
 # Example code in package build process
 *-Ex.R
 
